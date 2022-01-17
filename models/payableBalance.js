@@ -16,6 +16,11 @@ const itemSchema = new mongoose.Schema({
 		type: Number,
 		required: true,
 	},
+	used: {
+		type: Boolean,
+		default: false,
+		required: true,
+	},
 });
 
 const PayableBalance = mongoose.model('PayableBalance', itemSchema);

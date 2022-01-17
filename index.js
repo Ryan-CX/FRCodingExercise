@@ -5,7 +5,7 @@ const DB_CONNECTION =
 	'mongodb+srv://xcg:wrn2dyhh@notebook.h028d.mongodb.net/reward?retryWrites=true&w=majority';
 const mongoose = require('mongoose');
 const TransactionModel = require('./models/transaction');
-const BalanceModel = require('./models/balance');
+
 const payableBalanceModel = require('./models/payableBalance');
 
 app.use(express.json());
@@ -43,6 +43,7 @@ app.get('/updatePayableBalance', async (req, res) => {
 			payableBalance: 0,
 		});
 		//if same object already in the payableBalance database, we skip the operation
+
 		if (
 			await payableBalanceModel.findOne({
 				timestamp: transactions[i].timestamp,
@@ -50,14 +51,7 @@ app.get('/updatePayableBalance', async (req, res) => {
 			})
 		) {
 			continue;
-		}
-		//if not, we add the payableBalance object to the payableBalance database
-		await payableBalance.save();
-	}
-
-	//Iterate the transactions model, from the first item,if the object's points value is positive, add all the points(positive and negative) from the same payer in the model, and record the minimum value for that payer at that timestamp. Add the object to the payableBalance model.
-	for (let i = 0; i < transactions.length; i++) {
-		if (transactions[i].points > 0) {
+		} else {
 			//get the payer from the current transaction
 			const payer = transactions[i].payer;
 			//initial the minimum value for the payer
@@ -76,7 +70,10 @@ app.get('/updatePayableBalance', async (req, res) => {
 				{ $set: { payableBalance: minValue } }
 			);
 		}
+
+		await payableBalance.save();
 	}
+
 	//delete all the objects with negative points value or zero points value.
 	await payableBalanceModel.deleteMany({ payableBalance: { $lte: 0 } });
 
@@ -183,6 +180,7 @@ app.post('/spendPoints', async (req, res) => {
 					//if the availablePoints is smaller than the totalPoints, we need to deduct the availablePoints from the totalPoints, and set the availablePoints to 0.
 					totalPoints -= availablePoints;
 					payableBalance[i].payableBalance = 0;
+					payableBalance[i].use = true;
 					//update the payableBalance model with new points left
 					await payableBalance[i].save();
 
@@ -207,32 +205,22 @@ app.post('/spendPoints', async (req, res) => {
 	res.send(spendPoints);
 });
 
-//setup the balance route. Iterate through the payableBalance model, find the payer with the same name and add their points together. Return a json object with each payer's name and their total points.
+//setup the balance route. Iterate through the payableBalance model, find the payer with the same name and add their points together. Return a single json object with each payer's name and their total points in the format of {payer1:points1, payer2:points2, ...}.
 app.get('/balance', async (req, res) => {
+	//clear the balance object first to avoid duplicate payer and points
+
+	let balance = {};
 	try {
-		//get all payableBalance model from the database
 		let payableBalance = await payableBalanceModel.find();
-		//iterate through each payableBalance model, find the payer with the same name and add their points together.
 		for (let i = 0; i < payableBalance.length; i++) {
 			let payer = payableBalance[i].payer;
 			let points = payableBalance[i].payableBalance;
-			//find the payer with the same name in the balance model
-			let balancePayer = await BalanceModel.findOne({ payer: payer });
-			//if the payer is not found in the balance model, create a new payer and set the points to the points from the payableBalance model.
-			if (!balancePayer) {
-				let newBalancePayer = new BalanceModel({
-					payer: payer,
-					points: points,
-				});
-				await newBalancePayer.save();
+			if (balance[payer]) {
+				balance[payer] += points;
 			} else {
-				//if the payer is found in the balance model, add the points from the payableBalance model to the points in the balance model.
-				balancePayer.points += points;
-				await balancePayer.save();
+				balance[payer] = points;
 			}
 		}
-		//get all the payer and their points from the balance model
-		balance = await BalanceModel.find();
 	} catch (error) {
 		console.log(error);
 	}
