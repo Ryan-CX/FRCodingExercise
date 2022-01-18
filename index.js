@@ -27,55 +27,43 @@ app.get('/', async (req, res) => {
 	res.send(transactions);
 });
 
-//update the payableBalance database with the following rules:
-//1.The object is sorted by timestamp ascending
-//2.iterate the array of transactions,initial a minimum value for each payer,find the minimum points that a payer can get by adding all the transactions that are greater than the current timestamp, and subtract the points that a payer has spent by subtracting all the transactions that are greater than the current timestamp,and record the minimum value for each payer.
-//3. All the objects inside the payableBalance database have positive points value, discard the negative points value objects.
+
+//setup the route for showing all payable balances in the payableBalance database, it has 3 keys: timestamp, payer, payableBalance. Sorting by timestamp ascending.
 app.get('/updatePayableBalance', async (req, res) => {
 	//get all transactions with from the database and sort by timestamp ascending
-
 	const transactions = await TransactionModel.find().sort({ timestamp: 1 });
-	//first we iterate all transactions in the transactions model, we initialize a new payableBalance model with timestamp = transaction's timestamp, and payer = transaction's payer, and payableBalance = 0.
+	//iterate through the transactions, since the data has been sorted by timestamp, we started from the first one, if it's points are positive, we keep looking for the next one, for example if the transactions looks like this:
+// { "payer": "DANNON", "points": 1000, "timestamp": "2020-11-02T14:00:00Z" } 
+// { "payer": "UNILEVER", "points": 200, "timestamp": "2020-10-31T11:00:00Z" } 
+// { "payer": "DANNON", "points": -200, "timestamp": "2020-10-31T15:00:00Z" } 
+// { "payer": "MILLER COORS", "points": 10000, "timestamp": "2020-11-01T14:00:00Z" } 
+// { "payer": "DANNON", "points": 300, "timestamp": "2020-10-31T10:00:00Z" }, we should get the following payable balance:
+// { "timestamp": "2020-10-31T10:00:00Z", "payer": "DANNON", "payableBalance": 100 }, { "timestamp": "2020-10-31T11:00:00Z", "payer": "UNILEVER", "payableBalance": 100 },{ "timestamp": ""2020-11-01T14:00:00Z", "payer": "MILLER COORS", "payableBalance": 10000 },{ "timestamp": "2020-11-02T14:00:00Z" , "payer": "DANNON", "payableBalance": 1000 }
+
+	//iterate through the transactions
 	for (let i = 0; i < transactions.length; i++) {
-		const payableBalance = new payableBalanceModel({
-			timestamp: transactions[i].timestamp,
-			payer: transactions[i].payer,
-			payableBalance: 0,
-		});
-		//if same object already in the payableBalance database, we skip the operation
-
-		if (
-			await payableBalanceModel.findOne({
-				timestamp: transactions[i].timestamp,
-				payer: transactions[i].payer,
-			})
-		) {
-			continue;
-		} else {
-			//get the payer from the current transaction
-			const payer = transactions[i].payer;
-			//initial the minimum value for the payer
-			let minValue = transactions[i].points;
-
+		
+		if (transactions[i].points > 0) {
+			let payableBalance = transactions[i].points;
+			let timestamp = transactions[i].timestamp;
+			let payer = transactions[i].payer;
+			let used = false;
+			//iterate through the transactions again
 			for (let j = i + 1; j < transactions.length; j++) {
-				let totalValue = transactions[i].points;
-				//if the payer is the same, add or minus the points value to update the minimum value
-				if (transactions[j].payer === payer) {
-					totalValue += transactions[j].points;
-					minValue = Math.min(minValue, totalValue);
+				//if the points are positive, we set the payableBalance to this number and we keep looking for the next one,if the points are negative and happened in the same day, we deduct the points from the payableBalance and we keep looking for the next one until we find the next day. Then we add the obj to the payableBalance database.
+				if (transactions[j].points < 0 && transactions[j].timestamp.getDate() === timestamp.getDate()) {
+					payableBalance += transactions[j].points;
+					if (payableBalance < 0) {
+						payableBalance = 0;
+					}
 				}
-			}
-			await payableBalanceModel.updateOne(
-				{ payer: payer, timestamp: transactions[i].timestamp },
-				{ $set: { payableBalance: minValue } }
-			);
-		}
+				
+					
 
-		await payableBalance.save();
-	}
 
-	//delete all the objects with negative points value or zero points value.
-	await payableBalanceModel.deleteMany({ payableBalance: { $lte: 0 } });
+
+
+
 
 	//get all payableBalance objects from the database and sort by timestamp ascending
 	const payableBalance = await payableBalanceModel.find().sort({
@@ -143,9 +131,11 @@ app.post('/spendPoints', async (req, res) => {
 			totalPayableBalance += payableBalance[i].payableBalance;
 		}
 		if (totalPayableBalance < totalPoints) {
-			res.end(
-				`I'm sorry, you don't have enough points to spend. You have ${totalPayableBalance} points.`
-			);
+			//let the client know that we can not afford to spend the totalPoints
+			res.send({
+				"sorry,you don't have enough points, your total points is":
+					totalPayableBalance,
+			});
 		} else {
 			//while the totalPoints is greater or equal to 0, keep updating each payer's points after deduction. Remember how much points each payer spent from the payableBalance model before the totalPoints reaches 0. We need to return the payer and the points spent as an response after the totalPoints reaches 0. Also we need to update the transaction model after each payer's points spent.
 
@@ -180,7 +170,8 @@ app.post('/spendPoints', async (req, res) => {
 					//if the availablePoints is smaller than the totalPoints, we need to deduct the availablePoints from the totalPoints, and set the availablePoints to 0.
 					totalPoints -= availablePoints;
 					payableBalance[i].payableBalance = 0;
-					payableBalance[i].use = true;
+					//set used property to true
+					payableBalance[i].used = true;
 					//update the payableBalance model with new points left
 					await payableBalance[i].save();
 
