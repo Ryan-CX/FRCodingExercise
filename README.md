@@ -50,7 +50,7 @@ The expected response from the spend call would be:
 ## Some Thoughts
 
 When writing the logic for updating the payableBalance, there are few thing that I am considering:
-1. For the first time the payableBalance database is empty so we need to loop loop the transaction history first. When we checking the transaction history we only care about the positive value since that's the point we "got", we can only find out how much points we can spend when we have positive points.
+1. For the first time the payableBalance database is empty so we need to loop the transaction history first. When we checking the transaction history we only care about the positive value since that's the point we "got", we can only find out how much points we can spend when we have positive points.
 
 2. After we spend some points, at certain timestamp the payableBalance will be updated and if it reaches 0, the next time we spending points we bypass that timestamp and check the next one.
 3. The checkBalance route returns an object containing all the points from each payer, so it will updates when payableBalance changes.
