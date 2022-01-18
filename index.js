@@ -5,10 +5,17 @@ const DB_CONNECTION =
 	'mongodb+srv://xcg:wrn2dyhh@notebook.h028d.mongodb.net/reward?retryWrites=true&w=majority';
 const mongoose = require('mongoose');
 const TransactionModel = require('./models/transaction');
+<<<<<<< HEAD
 
 const payableBalanceModel = require('./models/payableBalance');
 
+=======
+>>>>>>> 645bf93b9a5e878f68443a3e30fffd2f6029ad8d
 app.use(express.json());
+const addTransactions = require('./routes/addTransactions');
+const balance = require('./routes/balance');
+const payableBalance = require('./routes/payableBalance');
+const spendPoints = require('./routes/spendPoints');
 
 //using mongoose to connect to mongodb
 mongoose.connect(
@@ -27,6 +34,7 @@ app.get('/', async (req, res) => {
 	res.send(transactions);
 });
 
+<<<<<<< HEAD
 
 //setup the route for showing all payable balances in the payableBalance database, it has 3 keys: timestamp, payer, payableBalance. Sorting by timestamp ascending.
 app.get('/updatePayableBalance', async (req, res) => {
@@ -217,6 +225,13 @@ app.get('/balance', async (req, res) => {
 	}
 	res.send(balance);
 });
+=======
+//The routes
+app.use('/addTransactions', addTransactions);
+app.use('/payableBalance', payableBalance);
+app.use('/spendPoints', spendPoints);
+app.use('/balance', balance);
+>>>>>>> 645bf93b9a5e878f68443a3e30fffd2f6029ad8d
 
 //setup the listen port
 app.listen(3000, () => {
