@@ -5,9 +5,7 @@ const DB_CONNECTION =
 	'mongodb+srv://xcg:wrn2dyhh@notebook.h028d.mongodb.net/reward?retryWrites=true&w=majority';
 const mongoose = require('mongoose');
 const TransactionModel = require('./models/transaction');
-
 const payableBalanceModel = require('./models/payableBalance');
-
 app.use(express.json());
 
 //using mongoose to connect to mongodb
@@ -29,34 +27,33 @@ app.get('/', async (req, res) => {
 
 //setup the route for showing all payable balances in the payableBalance database, it has 3 keys: timestamp, payer, payableBalance. Sorting by timestamp ascending.
 app.get('/updatePayableBalance', async (req, res) => {
-	//Before each
 	//get all transactions with from the database and sort by timestamp ascending
 	const transactions = await TransactionModel.find().sort({ timestamp: 1 });
 
 	for (let i = 0; i < transactions.length; i++) {
+		//We don't consider the negative points in the transaction.
 		if (transactions[i].points > 0) {
 			let payableBalance = transactions[i].points;
 			let timestamp = transactions[i].timestamp;
 			let payer = transactions[i].payer;
 			let used = false;
 
-			//iterate through the transactions
-			//when we iterate the transactions, if there is a transaction with same timestamp in the payableBalance database and it's payableBalance is 0 and it's used property is true, we do nothing and move on to the next transaction.
-			const payableBalanceObj = new payableBalanceModel({
+			//check obj with same payer name and timestamp, or object with 0 payableBalance already in database, if so we do nothing and move on to the next transaction.
+			const zeroBalance = await payableBalanceModel.findOne({
 				timestamp: timestamp,
 				payer: payer,
 				payableBalance: 0,
 				used: true,
 			});
-			//check obj if already in database, if so, delete it and add the new one
-			const checkObj = await TransactionModel.findOne({
+			const sameNameAndTime = await payableBalanceModel.findOne({
 				timestamp: timestamp,
 				payer: payer,
 			});
-			if (checkObj) {
+
+			if (zeroBalance || sameNameAndTime) {
 				continue;
 			} else {
-				//iterate through the transactions again
+				//iterate through the transactions
 				for (let j = i + 1; j < transactions.length; j++) {
 					// if found same payer with negative points on the same day, deduct the points from the payable balance and save the transaction; If found same payer with positive points, save as individual transaction
 
@@ -68,92 +65,47 @@ app.get('/updatePayableBalance', async (req, res) => {
 					) {
 						payableBalance += transactions[j].points;
 						if (payableBalance < 0) {
-							payableBalance = 0;
-							used = true;
 							//save the payableBalance to the database
 							const payableBalanceObj = new payableBalanceModel({
 								timestamp: timestamp,
 								payer: payer,
-								payableBalance: payableBalance,
-								used: used,
+								payableBalance: 0,
+								used: true,
 							});
-							//check obj if already in database, if so, delete it and add the new one
-							const checkObj = await payableBalanceModel.findOne({
-								timestamp: timestamp,
-								payer: payer,
-							});
-							if (checkObj) {
-								await payableBalanceModel.deleteOne({
-									timestamp: timestamp,
-									payer: payer,
-								});
-							}
-							//save the payableBalance to the database
+
 							await payableBalanceObj.save();
 						} else {
+							//if the points has remaining points, save the transaction.
 							const payableBalanceObj = new payableBalanceModel({
 								timestamp: timestamp,
 								payer: payer,
 								payableBalance: payableBalance,
-								used: used,
+								used: false,
 							});
-							//check obj if already in database, if so, delete it and add the new one
-							const checkObj = await payableBalanceModel.findOne({
-								timestamp: timestamp,
-								payer: payer,
-							});
-							if (checkObj) {
-								await payableBalanceModel.deleteOne({
-									timestamp: timestamp,
-									payer: payer,
-								});
-							}
-							//save the payableBalance to the database
 							await payableBalanceObj.save();
 						}
 					} else if (
 						//if same payer in different timestamp with positive points, save as individual transaction
 						transactions[j].payer === payer &&
-						transactions[j].points > 0
+						transactions[j].points > 0 &&
+						transactions[j].timestamp.getDate() !== timestamp.getDate()
 					) {
+						//save as new payableBalance object
 						const payableBalanceObj = new payableBalanceModel({
-							timestamp: timestamp,
-							payer: payer,
-							payableBalance: payableBalance,
-							used: used,
+							timestamp: transactions[j].timestamp,
+							payer: transactions[j].payer,
+							payableBalance: transactions[j].points,
+							used: false,
 						});
-						//check obj if already in database, if so, delete it and add the new one
-						const checkObj = await payableBalanceModel.findOne({
-							timestamp: timestamp,
-							payer: payer,
-						});
-						if (checkObj) {
-							await payableBalanceModel.deleteOne({
-								timestamp: timestamp,
-								payer: payer,
-							});
-						}
-						//save the payableBalance to the database
 						await payableBalanceObj.save();
 					} else {
+						//different payer with different timestamp with positive points, save as individual transaction
 						const payableBalanceObj = new payableBalanceModel({
-							timestamp: timestamp,
-							payer: payer,
-							payableBalance: payableBalance,
-							used: used,
+							timestamp: transactions[j].timestamp,
+							payer: transactions[j].payer,
+							payableBalance: transactions[j].points,
+							used: false,
 						});
-						//check obj if already in database, if so, delete it and add the new one
-						const checkObj = await payableBalanceModel.findOne({
-							timestamp: timestamp,
-							payer: payer,
-						});
-						if (checkObj) {
-							await payableBalanceModel.deleteOne({
-								timestamp: timestamp,
-								payer: payer,
-							});
-						}
-						//save the payableBalance to the database
 						await payableBalanceObj.save();
 					}
 				}
@@ -169,12 +121,6 @@ app.get('/updatePayableBalance', async (req, res) => {
 });
 
 //Setup add transaction route, including payer, points, and timestamp, save all transactions to mongodb
-
-// { "payer": "DANNON", "points": 1000, "timestamp": "2020-11-02T14:00:00Z" }
-// { "payer": "UNILEVER", "points": 200, "timestamp": "2020-10-31T11:00:00Z" }
-// { "payer": "DANNON", "points": -200, "timestamp": "2020-10-31T15:00:00Z" }
-// { "payer": "MILLER COORS", "points": 10000, "timestamp": "2020-11-01T14:00:00Z" }
-// { "payer": "DANNON", "points": 300, "timestamp": "2020-10-31T10:00:00Z" }
 app.post('/addTransaction', async (req, res) => {
 	const payer = req.body.payer;
 	const points = req.body.points;
@@ -235,16 +181,19 @@ app.post('/spendPoints', async (req, res) => {
 		} else {
 			//while the totalPoints is greater or equal to 0, keep updating each payer's points after deduction. Remember how much points each payer spent from the payableBalance model before the totalPoints reaches 0. We need to return the payer and the points spent as an response after the totalPoints reaches 0. Also we need to update the transaction model after each payer's points spent.
 
-			//initial a new array of json objects to store the payer and the points spent.
 			let i = 0;
 			while (i < payableBalance.length) {
+				if (payableBalance[i].payableBalance == 0) {
+					i++;
+					continue;
+				}
 				//get the payer and the points spent from the payableBalance model
 				let payer = payableBalance[i].payer;
 				let availablePoints = payableBalance[i].payableBalance;
 
 				//if the availablePoints is greater than the totalPoints, we need to deduct the totalPoints from the availablePoints, and set the availablePoints to 0.
 
-				if (availablePoints > totalPoints) {
+				if (availablePoints >= totalPoints) {
 					payableBalance[i].payableBalance = availablePoints - totalPoints;
 
 					//update the payableBalance model with new points left
