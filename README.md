@@ -42,6 +42,8 @@ The expected response from the spend call would be:
 { "payer": "UNILEVER", "points": -200 },  
 { "payer": "MILLER COORS", "points": -4,700 }  
 ]
+
+
 **Although as per the 1st transaction DANNON has 300 points, but we can not spend it all since later that day we spent another 200 from it which brought it down to 100. That's why for the 5000 points we spent we only took 100 points from DANNON.**
 
 
