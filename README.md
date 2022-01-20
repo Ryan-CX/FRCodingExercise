@@ -103,6 +103,7 @@ Will return how much points available sorted by timestamp.
 3. app.post('/addTransaction')
 Will add a single transaction to the databse, for example:
 `{  "payer":  "DANNON",  "points":  300,  "timestamp":  "2020-10-31T10:00:00Z"  }`
+
 If this is the first time adding, will return 200 OK and saved in the database, else will return "Transaction already existed".
 
 
