@@ -82,6 +82,45 @@ When writing the logic for updating the payableBalance, there are few thing that
 
 
 
+## Sample Response	
+
+1. app.get('/')
+will get the existing transaction in the database based on the timestamp, oldest first.
+`[
+{"_id":"61e70c63e1acd1509dd545cd","payer":"DANNON","points":300,"timestamp":"2020-10-31T10:00:00.000Z","__v":0},  {"_id":"61e70c4ae1acd1509dd545c4","payer":"UNILEVER","points":200,"timestamp":"2020-10-31T11:00:00.000Z","__v":0},{"_id":"61e70c57e1acd1509dd545c7","payer":"DANNON","points":-200,"timestamp":"2020-10-31T15:00:00.000Z","__v":0},
+{"_id":"61e70c5fe1acd1509dd545ca","payer":"MILLER COORS","points":10000,"timestamp":"2020-11-01T14:00:00.000Z","__v":0},{"_id":"61e70c45e1acd1509dd545c1","payer":"DANNON","points":1000,"timestamp":"2020-11-02T14:00:00.000Z","__v":0}
+]`
+
+2. app.get('/updatePayableBalance')
+Will return how much points available sorted by timestamp.
+`[
+{"_id":"61e9774a0dd001b414b09362","timestamp":"2020-10-31T10:00:00.000Z","payer":"DANNON","payableBalance":100,"__v":0},
+{"_id":"61e9774a0dd001b414b09360","timestamp":"2020-10-31T11:00:00.000Z","payer":"UNILEVER","payableBalance":200,"__v":0},	  	{"_id":"61e9774a0dd001b414b09364","timestamp":"2020-11-01T14:00:00.000Z","payer":"MILLER COORS","payableBalance":10000,"__v":0},
+{"_id":"61e9774a0dd001b414b09366","timestamp":"2020-11-02T14:00:00.000Z","payer":"DANNON","payableBalance":1000,"__v":0}
+]`
+
+
+3. app.post('/addTransaction')
+Will add a single transaction to the databse, for example:
+`{  "payer":  "DANNON",  "points":  300,  "timestamp":  "2020-10-31T10:00:00Z"  }`
+If this is the first time adding, will return 200 OK and saved in the database, else will return "Transaction already existed".
+
+
+4. app.post('/spendPoints')
+This is to sent a request in the format of {"points": number} to spend points.
+`{  "points":  5000  }`
+
+If current points are less than the spend points, will return "not enough balance", else return the detail of the spending. 
+`[  
+{ "payer": "DANNON", "points": -100 },  
+{ "payer": "UNILEVER", "points": -200 },  
+{ "payer": "MILLER COORS", "points": -4,700 }  
+]`
+
+5. app.get('/balance')
+Will return balance from each payer:
+For example, before any spending based on the above starting points will return:
+`{"UNILEVER":200,"DANNON":1100,"MILLER COORS":10000}`
 
 
 
